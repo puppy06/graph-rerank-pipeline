@@ -1,0 +1,5 @@
+jax>=0.4.30
+jaxlib>=0.4.30
+langgraph>=0.2.0
+cohere>=5.0.0
+python-dotenv>=1.0.0
