@@ -20,6 +20,8 @@ graph-rerank-pipeline/
 ├── data_pipeline/    # Ingestion, chunking, vector store
 ├── math_ops/         # JAX re-ranking and related numerics
 │   └── reranker.py
+├── providers/        # Cloud/local model provider implementations
+├── config.py         # Backend toggle and model settings
 ├── requirements.txt
 └── README.md
 ```
@@ -42,10 +44,86 @@ graph-rerank-pipeline/
 3. Create a `.env` file in the project root (do not commit secrets):
 
    ```bash
+   USE_LOCAL_MODEL=false
    COHERE_API_KEY=your_key_here
    ```
 
    The project uses `python-dotenv` so applications can load these variables with `load_dotenv()`.
+
+## Dual backend (one stack per run)
+
+The codebase supports **two complete backends**; you pick one with **`USE_LOCAL_MODEL`**. Only that backend is constructed and used—Cohere and local Llama/BGE do not run together or share a mixed pipeline.
+
+- `providers/base.py` defines `BaseModelProvider` with:
+  - `embed(texts: list[str]) -> np.ndarray`
+  - `generate(prompt: str, *, max_new_tokens: int = 256) -> str`
+- `providers/cohere_client.py` — full Cohere (`USE_LOCAL_MODEL=false`): embed + chat via the API.
+- `providers/local_client.py` — full local (`USE_LOCAL_MODEL=true`): BGE-M3 + Llama 3 via `transformers` / `bitsandbytes`.
+- `providers/factory.py` — `get_provider()` returns **either** a `CohereProvider` **or** a `LocalProvider`.
+
+Set `USE_LOCAL_MODEL=true` for the open-source stack (e.g. Colab T4); keep it `false` and set `COHERE_API_KEY` for the cloud stack.
+
+With Cohere, embeddings default to `embed-v4.0` and `COHERE_EMBED_API=auto` tries v2 then v1. Optional `COHERE_EMBED_FALLBACK_MODELS` lists extra model ids if the primary returns 404. If your key has no Embed access, switch to **`USE_LOCAL_MODEL=true`** (full local) or use a production key with Embed enabled.
+
+For GPU memory sharing with JAX, local mode sets:
+
+```bash
+XLA_PYTHON_CLIENT_PREALLOCATE=false
+```
+
+Example usage:
+
+```python
+import jax.numpy as jnp
+from providers import get_provider
+from math_ops import rerank_indices
+
+provider = get_provider()
+
+query_vec = provider.embed(["What were NVIDIA and AMD Q4 gross margins?"])[0]
+doc_matrix = provider.embed(
+    [
+        "NVIDIA Q4 gross margin was 76.0%.",
+        "AMD Q4 gross margin was 51.0%.",
+        "A third unrelated passage.",
+    ]
+)
+
+ranked_idx = rerank_indices(
+    query=jnp.asarray(query_vec),
+    doc_matrix=jnp.asarray(doc_matrix),
+    mode="cosine",
+    top_k=2,
+)
+
+answer = provider.generate("Compare NVIDIA and AMD Q4 gross margins.")
+print(ranked_idx, answer)
+```
+
+## Quick run demo
+
+Run a complete flow (embed -> rerank -> generate) with whichever backend is selected:
+
+```bash
+python scripts/demo_hybrid_rerank.py
+```
+
+Rerank only (no generation):
+
+```bash
+python scripts/demo_hybrid_rerank.py --skip-generate
+```
+
+Custom query and docs:
+
+```bash
+python scripts/demo_hybrid_rerank.py \
+  --query "Compare NVIDIA and AMD Q4 gross margins" \
+  --doc "NVIDIA Q4 gross margin was 76.0%." \
+  --doc "AMD Q4 gross margin was 51.0%." \
+  --doc "Random unrelated paragraph." \
+  --top-k 2
+```
 
 ## JAX re-ranking module
 
@@ -55,7 +133,7 @@ graph-rerank-pipeline/
 - `cosine_scores(query, doc_matrix)` L2-normalized cosine similarity per row.
 - `rerank_indices(query, doc_matrix, mode="cosine", top_k=None)` returns indices from best to worst match.
 
-Embeddings from Cohere Embed v3 are typically `float32`; keep dtypes consistent with your JAX arrays for predictable behavior.
+Embeddings from Cohere are typically `float32`; keep dtypes consistent with your JAX arrays for predictable behavior.
 
 Run Python from the repository root so `import math_ops` resolves, or add the root to `PYTHONPATH`.
 
