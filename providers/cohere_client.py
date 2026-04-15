@@ -41,7 +41,7 @@ class CohereProvider(BaseModelProvider):
         api_key: str,
         *,
         embed_model: str = "embed-v4.0",
-        generate_model: str = "command-r-plus",
+        generate_model: str = "command-r-08-2024",
         embed_output_dimension: int | None = 1024,
         embed_api: EmbedApiMode | str = "auto",
         embed_fallback_models: list[str] | None = None,
@@ -79,10 +79,12 @@ class CohereProvider(BaseModelProvider):
             self._client = self._client_v1
             self._use_v2 = False
 
-    def _embed_v2(self, model: str, texts: list[str]) -> list[list[float]]:
+    def _embed_v2(
+        self, model: str, texts: list[str], *, input_type: str
+    ) -> list[list[float]]:
         kwargs: dict[str, Any] = {
             "model": model,
-            "input_type": "search_document",
+            "input_type": input_type,
             "texts": texts,
             "embedding_types": ["float"],
         }
@@ -91,14 +93,16 @@ class CohereProvider(BaseModelProvider):
         response = self._client.embed(**kwargs)
         return _float_vectors_from_v2(response)
 
-    def _embed_v1(self, model: str, texts: list[str]) -> list[list[float]]:
+    def _embed_v1(
+        self, model: str, texts: list[str], *, input_type: str
+    ) -> list[list[float]]:
         # batching=False avoids threaded batch path; try without embedding_types first
         # (some accounts route "light" models to packed variants only when types are set).
         try:
             response = self._client_v1.embed(
                 texts=texts,
                 model=model,
-                input_type="search_document",
+                input_type=input_type,
                 batching=False,
             )
             return _float_vectors_from_v1(response)
@@ -108,18 +112,20 @@ class CohereProvider(BaseModelProvider):
             response = self._client_v1.embed(
                 texts=texts,
                 model=model,
-                input_type="search_document",
+                input_type=input_type,
                 embedding_types=["float"],
                 batching=False,
             )
             return _float_vectors_from_v1(response)
 
-    def embed(self, texts: list[str]) -> np.ndarray:
+    def _embed_for_input_type(self, texts: list[str], *, input_type: str) -> np.ndarray:
         if not texts:
             return np.empty((0, 0), dtype=np.float32)
 
         if not self._use_v2:
-            vectors = self._embed_v1(self.embed_model, texts)
+            vectors = self._embed_v1(
+                self.embed_model, texts, input_type=input_type
+            )
             return np.asarray(vectors, dtype=np.float32)
 
         models_to_try = [self.embed_model, *self.embed_fallback_models]
@@ -133,7 +139,7 @@ class CohereProvider(BaseModelProvider):
 
             if self.embed_api in ("v2", "auto"):
                 try:
-                    vectors = self._embed_v2(model, texts)
+                    vectors = self._embed_v2(model, texts, input_type=input_type)
                     return np.asarray(vectors, dtype=np.float32)
                 except self._NotFoundError as e:
                     last_err = e
@@ -144,7 +150,7 @@ class CohereProvider(BaseModelProvider):
 
             if self.embed_api in ("v1", "auto"):
                 try:
-                    vectors = self._embed_v1(model, texts)
+                    vectors = self._embed_v1(model, texts, input_type=input_type)
                     return np.asarray(vectors, dtype=np.float32)
                 except self._NotFoundError as e:
                     last_err = e
@@ -161,6 +167,15 @@ class CohereProvider(BaseModelProvider):
         if last_err is not None:
             raise RuntimeError(msg) from last_err
         raise RuntimeError(msg)
+
+    def embed(self, texts: list[str]) -> np.ndarray:
+        return self.embed_documents(texts)
+
+    def embed_documents(self, texts: list[str]) -> np.ndarray:
+        return self._embed_for_input_type(texts, input_type="search_document")
+
+    def embed_query(self, texts: list[str]) -> np.ndarray:
+        return self._embed_for_input_type(texts, input_type="search_query")
 
     def generate(self, prompt: str, *, max_new_tokens: int = 256) -> str:
         if self._use_v2:

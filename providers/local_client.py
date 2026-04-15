@@ -62,7 +62,7 @@ class LocalProvider(BaseModelProvider):
         counts = torch.clamp(mask.sum(dim=1), min=1e-9)
         return summed / counts
 
-    def embed(self, texts: list[str]) -> np.ndarray:
+    def _embed_impl(self, texts: list[str]) -> np.ndarray:
         if not texts:
             return np.empty((0, 0), dtype=np.float32)
 
@@ -78,6 +78,15 @@ class LocalProvider(BaseModelProvider):
             pooled = self._mean_pool(outputs.last_hidden_state, batch["attention_mask"])
             normalized = torch.nn.functional.normalize(pooled, p=2, dim=1)
             return normalized.detach().cpu().numpy().astype(np.float32)
+
+    def embed(self, texts: list[str]) -> np.ndarray:
+        return self.embed_documents(texts)
+
+    def embed_documents(self, texts: list[str]) -> np.ndarray:
+        return self._embed_impl(texts)
+
+    def embed_query(self, texts: list[str]) -> np.ndarray:
+        return self._embed_impl(texts)
 
     def generate(self, prompt: str, *, max_new_tokens: int = 256) -> str:
         messages = [{"role": "user", "content": prompt}]

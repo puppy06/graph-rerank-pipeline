@@ -10,17 +10,19 @@ The aim is to handle complex queries that need several retrieval steps (for exam
 |------|--------|
 | JAX dot and cosine similarity over a query vector and document matrix | Implemented in `math_ops/reranker.py` |
 | LangGraph agent (search, re-rank, verify, synthesize) | Planned under `agents/` |
-| Local vector store (ChromaDB or Qdrant) and ingestion | Planned under `data_pipeline/` |
+| Chroma vector store, chunking, and ingestion | Implemented under `data_pipeline/` |
 
 ## Repository layout
 
 ```
 graph-rerank-pipeline/
 ├── agents/           # LangGraph StateGraph and node logic
+├── corpus/           # Example documents for RAG ingest
 ├── data_pipeline/    # Ingestion, chunking, vector store
 ├── math_ops/         # JAX re-ranking and related numerics
 │   └── reranker.py
 ├── providers/        # Cloud/local model provider implementations
+├── scripts/          # CLI demos (hybrid rerank, RAG)
 ├── config.py         # Backend toggle and model settings
 ├── requirements.txt
 └── README.md
@@ -55,7 +57,8 @@ graph-rerank-pipeline/
 The codebase supports **two complete backends**; you pick one with **`USE_LOCAL_MODEL`**. Only that backend is constructed and used—Cohere and local Llama/BGE do not run together or share a mixed pipeline.
 
 - `providers/base.py` defines `BaseModelProvider` with:
-  - `embed(texts: list[str]) -> np.ndarray`
+  - `embed(texts: list[str]) -> np.ndarray` (alias for document embeddings)
+  - `embed_documents` / `embed_query` for RAG (Cohere uses `search_document` vs `search_query`)
   - `generate(prompt: str, *, max_new_tokens: int = 256) -> str`
 - `providers/cohere_client.py` — full Cohere (`USE_LOCAL_MODEL=false`): embed + chat via the API.
 - `providers/local_client.py` — full local (`USE_LOCAL_MODEL=true`): BGE-M3 + Llama 3 via `transformers` / `bitsandbytes`.
@@ -63,7 +66,7 @@ The codebase supports **two complete backends**; you pick one with **`USE_LOCAL_
 
 Set `USE_LOCAL_MODEL=true` for the open-source stack (e.g. Colab T4); keep it `false` and set `COHERE_API_KEY` for the cloud stack.
 
-With Cohere, embeddings default to `embed-v4.0` and `COHERE_EMBED_API=auto` tries v2 then v1. Optional `COHERE_EMBED_FALLBACK_MODELS` lists extra model ids if the primary returns 404. If your key has no Embed access, switch to **`USE_LOCAL_MODEL=true`** (full local) or use a production key with Embed enabled.
+With Cohere, embeddings default to `embed-v4.0` and `COHERE_EMBED_API=auto` tries v2 then v1. Optional `COHERE_EMBED_FALLBACK_MODELS` lists extra model ids if the primary returns 404. Chat defaults to **`command-r-08-2024`** (`COHERE_GENERATE_MODEL`); older ids like `command-r-plus` were retired in Sept 2025—see [Cohere deprecations](https://docs.cohere.com/docs/deprecations). If your key has no Embed access, switch to **`USE_LOCAL_MODEL=true`** (full local) or use a production key with Embed enabled.
 
 For GPU memory sharing with JAX, local mode sets:
 
@@ -80,8 +83,8 @@ from math_ops import rerank_indices
 
 provider = get_provider()
 
-query_vec = provider.embed(["What were NVIDIA and AMD Q4 gross margins?"])[0]
-doc_matrix = provider.embed(
+query_vec = provider.embed_query(["What were NVIDIA and AMD Q4 gross margins?"])[0]
+doc_matrix = provider.embed_documents(
     [
         "NVIDIA Q4 gross margin was 76.0%.",
         "AMD Q4 gross margin was 51.0%.",
@@ -124,6 +127,22 @@ python scripts/demo_hybrid_rerank.py \
   --doc "Random unrelated paragraph." \
   --top-k 2
 ```
+
+## RAG (ingest + retrieve + rerank + generate)
+
+1. **Ingest** all `.txt` / `.md` files under a directory into a local **Chroma** index (embeddings use `embed_documents`). Use `--reset` to replace the collection.
+
+   ```bash
+   python scripts/rag.py ingest --data-dir corpus --reset
+   ```
+
+2. **Ask**: embed the question with `embed_query`, pull `recall-k` neighbors from Chroma, **rerank** every candidate with JAX (`math_ops/reranker.py`), then pass the top passages to the LLM.
+
+   ```bash
+   python scripts/rag.py ask --query "Compare NVIDIA and AMD Q4 gross margins."
+   ```
+
+   Optional env vars: `RAG_CHROMA_PATH` (default `.chroma`), `RAG_COLLECTION_NAME`, `RAG_EMBED_BATCH_SIZE`. The index directory is gitignored.
 
 ## JAX re-ranking module
 

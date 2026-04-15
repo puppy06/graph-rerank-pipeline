@@ -74,8 +74,8 @@ def main() -> None:
 
     provider = get_provider()
 
-    query_embedding = provider.embed([args.query])[0]
-    doc_embeddings = provider.embed(docs)
+    query_embedding = provider.embed_query([args.query])[0]
+    doc_embeddings = provider.embed_documents(docs)
 
     ranked = rerank_indices(
         query=jnp.asarray(query_embedding),

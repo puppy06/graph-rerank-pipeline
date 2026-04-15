@@ -26,7 +26,8 @@ _fallback_raw = os.getenv("COHERE_EMBED_FALLBACK_MODELS", "").strip()
 COHERE_EMBED_FALLBACK_MODELS = [
     m.strip() for m in _fallback_raw.split(",") if m.strip()
 ]
-COHERE_GENERATE_MODEL = os.getenv("COHERE_GENERATE_MODEL", "command-r-plus")
+# command-r-plus retired 2025-09-15; see https://docs.cohere.com/docs/deprecations
+COHERE_GENERATE_MODEL = os.getenv("COHERE_GENERATE_MODEL", "command-r-08-2024")
 
 # Local options (T4-friendly defaults)
 LOCAL_LLM_MODEL_ID = os.getenv("LOCAL_LLM_MODEL_ID", "meta-llama/Meta-Llama-3-8B-Instruct")
@@ -35,3 +36,8 @@ LOCAL_DEVICE = os.getenv("LOCAL_DEVICE", "cuda")
 
 # Prevent JAX from grabbing most GPU memory up front.
 os.environ.setdefault("XLA_PYTHON_CLIENT_PREALLOCATE", "false")
+
+# RAG / vector index (Chroma persists under this directory by default)
+RAG_CHROMA_PATH = os.getenv("RAG_CHROMA_PATH", ".chroma")
+RAG_COLLECTION_NAME = os.getenv("RAG_COLLECTION_NAME", "rag_chunks")
+RAG_EMBED_BATCH_SIZE = int(os.getenv("RAG_EMBED_BATCH_SIZE", "48"))
