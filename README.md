@@ -52,6 +52,61 @@ graph-rerank-pipeline/
 
    The project uses `python-dotenv` so applications can load these variables with `load_dotenv()`.
 
+## Quick run demo
+
+Run a complete flow (embed -> rerank -> generate) with whichever backend is selected:
+
+```bash
+python scripts/demo_hybrid_rerank.py
+```
+
+Rerank only (no generation):
+
+```bash
+python scripts/demo_hybrid_rerank.py --skip-generate
+```
+
+Custom query and docs:
+
+```bash
+python scripts/demo_hybrid_rerank.py \
+  --query "Compare NVIDIA and AMD Q4 gross margins" \
+  --doc "NVIDIA Q4 gross margin was 76.0%." \
+  --doc "AMD Q4 gross margin was 51.0%." \
+  --doc "Random unrelated paragraph." \
+  --top-k 2
+```
+
+## RAG (ingest + retrieve + rerank + generate)
+
+1. **Ingest** all `.txt` / `.md` files under a directory into a local **Chroma** index (embeddings use `embed_documents`). Use `--reset` to replace the collection.
+
+   ```bash
+   python scripts/rag.py ingest --data-dir corpus --reset
+   ```
+
+2. **Ask**: embed the question with `embed_query`, pull `recall-k` neighbors from Chroma, **rerank** every candidate with JAX (`math_ops/reranker.py`), then pass the top passages to the LLM.
+
+   ```bash
+   python scripts/rag.py ask --query "Compare NVIDIA and AMD Q4 gross margins."
+   ```
+
+   Optional env vars: `RAG_CHROMA_PATH` (default `.chroma`), `RAG_COLLECTION_NAME`, `RAG_EMBED_BATCH_SIZE`. The index directory is gitignored.
+
+## LangGraph orchestration
+
+Use a stateful LangGraph workflow for `retrieve -> rerank -> synthesize` with a
+score-based fallback when retrieval confidence is low:
+
+```bash
+python scripts/langgraph_rag.py --query "Compare NVIDIA and AMD Q4 gross margins."
+```
+
+Useful options:
+- `--skip-generate` prints reranked passages only.
+- `--min-score` controls fallback threshold for top rerank score (default `0.2`).
+- `--recall-k` controls ANN candidates from Chroma before reranking.
+
 ## Run in Google Colab (T4)
 
 If you are using `colab_t4_gpu_setup.ipynb`, run the notebook directly in Colab, not from your local terminal.
@@ -116,60 +171,6 @@ answer = provider.generate("Compare NVIDIA and AMD Q4 gross margins.")
 print(ranked_idx, answer)
 ```
 
-## Quick run demo
-
-Run a complete flow (embed -> rerank -> generate) with whichever backend is selected:
-
-```bash
-python scripts/demo_hybrid_rerank.py
-```
-
-Rerank only (no generation):
-
-```bash
-python scripts/demo_hybrid_rerank.py --skip-generate
-```
-
-Custom query and docs:
-
-```bash
-python scripts/demo_hybrid_rerank.py \
-  --query "Compare NVIDIA and AMD Q4 gross margins" \
-  --doc "NVIDIA Q4 gross margin was 76.0%." \
-  --doc "AMD Q4 gross margin was 51.0%." \
-  --doc "Random unrelated paragraph." \
-  --top-k 2
-```
-
-## RAG (ingest + retrieve + rerank + generate)
-
-1. **Ingest** all `.txt` / `.md` files under a directory into a local **Chroma** index (embeddings use `embed_documents`). Use `--reset` to replace the collection.
-
-   ```bash
-   python scripts/rag.py ingest --data-dir corpus --reset
-   ```
-
-2. **Ask**: embed the question with `embed_query`, pull `recall-k` neighbors from Chroma, **rerank** every candidate with JAX (`math_ops/reranker.py`), then pass the top passages to the LLM.
-
-   ```bash
-   python scripts/rag.py ask --query "Compare NVIDIA and AMD Q4 gross margins."
-   ```
-
-   Optional env vars: `RAG_CHROMA_PATH` (default `.chroma`), `RAG_COLLECTION_NAME`, `RAG_EMBED_BATCH_SIZE`. The index directory is gitignored.
-
-## LangGraph orchestration
-
-Use a stateful LangGraph workflow for `retrieve -> rerank -> synthesize` with a
-score-based fallback when retrieval confidence is low:
-
-```bash
-python scripts/langgraph_rag.py --query "Compare NVIDIA and AMD Q4 gross margins."
-```
-
-Useful options:
-- `--skip-generate` prints reranked passages only.
-- `--min-score` controls fallback threshold for top rerank score (default `0.2`).
-- `--recall-k` controls ANN candidates from Chroma before reranking.
 
 ## JAX re-ranking module
 

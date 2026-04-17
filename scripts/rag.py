@@ -65,7 +65,8 @@ def _cmd_ask(args: argparse.Namespace) -> None:
     for rank, ch in enumerate(ordered, start=1):
         src = ch.metadata.get("source", "?")
         print(f"{rank}. [{ch.id}] ({src})")
-        print(ch.text[:500] + ("…" if len(ch.text) > 500 else ""))
+        # Uncomment to print the text of the chunk
+        #print(ch.text[:500] + ("…" if len(ch.text) > 500 else ""))
         print()
 
     if args.skip_generate:
