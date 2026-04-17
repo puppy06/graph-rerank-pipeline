@@ -60,7 +60,7 @@ def main() -> None:
         source = chunk.metadata.get("source", "?")
         score = result.scores[idx - 1] if idx - 1 < len(result.scores) else float("nan")
         print(f"{idx}. score={score:.4f} [{chunk.id}] ({source})")
-        print(chunk.text[:500] + ("..." if len(chunk.text) > 500 else ""))
+        #print(chunk.text[:500] + ("..." if len(chunk.text) > 500 else ""))
         print()
 
     if args.skip_generate:

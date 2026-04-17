@@ -100,6 +100,10 @@ def _route_after_rerank(state: RagState) -> str:
 
 
 def _synthesize_node(state: RagState, *, provider: BaseModelProvider) -> RagState:
+    # Defensive guard: never invoke generation when skip_generate is enabled.
+    if state["skip_generate"]:
+        return {**state, "answer": ""}
+
     context_lines = []
     for chunk in state["reranked"]:
         source = chunk.metadata.get("source", "?")

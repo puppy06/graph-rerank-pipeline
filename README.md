@@ -43,7 +43,7 @@ graph-rerank-pipeline/
    pip install -r requirements.txt
    ```
 
-3. Create a `.env` file in the project root (do not commit secrets):
+3. Create a `.env` file in the project root:
 
    ```bash
    USE_LOCAL_MODEL=false
@@ -51,6 +51,19 @@ graph-rerank-pipeline/
    ```
 
    The project uses `python-dotenv` so applications can load these variables with `load_dotenv()`.
+
+## Run in Google Colab (T4)
+
+If you are using `colab_t4_gpu_setup.ipynb`, run the notebook directly in Colab, not from your local terminal.
+
+1. Upload `colab_t4_gpu_setup.ipynb` to Google Drive.
+2. In Drive, right-click the file and choose **Open with -> Google Colaboratory**.
+3. In Colab, set **Runtime -> Change runtime type -> GPU**.
+4. Run the notebook cells top to bottom.
+
+Important:
+- Run commands as Colab cells (for example, `!python scripts/rag.py ...`) after `%cd /content/graph-rerank-pipeline`.
+- Do not run those same commands in your local PowerShell terminal if you expect Colab's T4 GPU to be used.
 
 ## Dual backend (one stack per run)
 
