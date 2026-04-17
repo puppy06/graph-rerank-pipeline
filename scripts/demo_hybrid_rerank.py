@@ -61,6 +61,9 @@ def parse_args() -> argparse.Namespace:
 
 
 def default_docs() -> list[str]:
+    #default_path = _ROOT / "docs" / "The Shifting Landscape of Semiconductor Margins.txt"
+    #if default_path.exists():
+    #    return [default_path.read_text(encoding="utf-8-sig", errors="replace").strip()]
     return [
         "NVIDIA reported a Q4 gross margin of 76.0%.",
         "AMD reported a Q4 gross margin of 51.0%.",

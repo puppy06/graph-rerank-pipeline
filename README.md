@@ -9,7 +9,7 @@ The aim is to handle complex queries that need several retrieval steps (for exam
 | Area | Status |
 |------|--------|
 | JAX dot and cosine similarity over a query vector and document matrix | Implemented in `math_ops/reranker.py` |
-| LangGraph agent (search, re-rank, verify, synthesize) | Planned under `agents/` |
+| LangGraph orchestration (retrieve, re-rank, synthesize, fallback) | Implemented in `agents/rag_graph.py` |
 | Chroma vector store, chunking, and ingestion | Implemented under `data_pipeline/` |
 
 ## Repository layout
@@ -143,6 +143,20 @@ python scripts/demo_hybrid_rerank.py \
    ```
 
    Optional env vars: `RAG_CHROMA_PATH` (default `.chroma`), `RAG_COLLECTION_NAME`, `RAG_EMBED_BATCH_SIZE`. The index directory is gitignored.
+
+## LangGraph orchestration
+
+Use a stateful LangGraph workflow for `retrieve -> rerank -> synthesize` with a
+score-based fallback when retrieval confidence is low:
+
+```bash
+python scripts/langgraph_rag.py --query "Compare NVIDIA and AMD Q4 gross margins."
+```
+
+Useful options:
+- `--skip-generate` prints reranked passages only.
+- `--min-score` controls fallback threshold for top rerank score (default `0.2`).
+- `--recall-k` controls ANN candidates from Chroma before reranking.
 
 ## JAX re-ranking module
 
